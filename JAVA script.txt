@@ -1,0 +1,107 @@
+mkdir voting-app && cd voting-app && \
+npm init -y && \
+npm install express cors && \
+cat > server.js << 'EOF'
+const express = require("express");
+const cors = require("cors");
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+let votes = {};
+let results = {};
+
+app.post("/vote", (req, res) => {
+  const { userId, choice } = req.body;
+
+  if (!userId || !choice) {
+    return res.status(400).json({ message: "missing data" });
+  }
+
+  if (votes[userId]) {
+    return res.json({ message: "already voted" });
+  }
+
+  votes[userId] = choice;
+  results[choice] = (results[choice] || 0) + 1;
+
+  res.json({ message: "success" });
+});
+
+app.get("/check/:userId", (req, res) => {
+  res.json({ hasVoted: !!votes[req.params.userId] });
+});
+
+app.get("/results", (req, res) => {
+  res.json(results);
+});
+
+app.get("/", (req, res) => {
+  res.send(\`
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body style="text-align:center;font-family:sans-serif">
+<h2>Vote</h2>
+<button onclick="vote('A')">A</button>
+<button onclick="vote('B')">B</button>
+<button onclick="vote('C')">C</button>
+<p id="msg"></p>
+<h3>Results</h3>
+<div id="result"></div>
+
+<script>
+const LIFF_ID = "2009926561-03nVgfb6";
+let userId = null;
+
+async function init() {
+  await liff.init({ liffId: LIFF_ID });
+  if (!liff.isLoggedIn()) { liff.login(); return; }
+  const profile = await liff.getProfile();
+  userId = profile.userId;
+  check();
+  loadResults();
+}
+
+async function vote(choice) {
+  const res = await fetch("/vote", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({ userId, choice })
+  });
+  const data = await res.json();
+  document.getElementById("msg").innerText = data.message;
+  loadResults();
+}
+
+async function check() {
+  const res = await fetch("/check/" + userId);
+  const data = await res.json();
+  if (data.hasVoted) {
+    document.getElementById("msg").innerText = "คุณโหวตแล้ว";
+  }
+}
+
+async function loadResults() {
+  const res = await fetch("/results");
+  const data = await res.json();
+  let html = "";
+  for (let k in data) {
+    html += k + ": " + data[k] + "<br>";
+  }
+  document.getElementById("result").innerHTML = html;
+}
+
+init();
+</script>
+</body>
+</html>
+\`);
+});
+
+module.exports = app; () => console.log("http://localhost:3000"));
+EOF
